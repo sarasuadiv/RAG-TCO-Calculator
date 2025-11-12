@@ -1,0 +1,1679 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RAG Architecture TCO Calculator — LEGO Style</title>
+<style>
+  :root{
+    --lego-red:#D11013; --lego-yellow:#F6EC35; --lego-blue:#0066CC; --lego-green:#00A651;
+    --lego-black:#000; --lego-white:#fff;
+    --bg:#fffdf8; --ink:#0c0d10; --ink-dim:#525866; --panel:#fff; --line:#e7e3d6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial;
+       -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+  .wrap{max-width:1400px;margin:0 auto;padding:20px}
+  .header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+  .brand{display:flex;align-items:center;gap:12px;font-weight:800}
+  .badge{display:inline-grid;place-items:center;width:48px;height:48px;border-radius:10px;
+         background:linear-gradient(135deg, var(--lego-blue) 0%, #1e40af 100%);
+         color:#fff;font-size:24px;box-shadow:0 4px 0 rgba(0,0,0,.2),inset 0 2px 0 rgba(255,255,255,.2)}
+  .title{font-size:20px}
+  .reset-btn{margin-left:auto;padding:8px 16px;border-radius:999px;border:2px solid var(--lego-black);
+             background:#fff;color:var(--lego-black);font-weight:700;cursor:pointer;
+             box-shadow:0 3px 0 rgba(0,0,0,.25);transition:transform 150ms,box-shadow 150ms;font-size:14px}
+  .reset-btn:hover{transform:translateY(-2px);box-shadow:0 5px 0 rgba(0,0,0,.25)}
+  
+  .presets{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+  .preset-btn{padding:10px 16px;border-radius:12px;border:3px solid var(--lego-black);background:var(--lego-yellow);
+              color:var(--lego-black);cursor:pointer;font-weight:700;box-shadow:0 3px 0 rgba(0,0,0,.25);
+              transition:all 150ms;font-size:14px}
+  .preset-btn:hover{transform:translateY(-2px);box-shadow:0 5px 0 rgba(0,0,0,.25)}
+  .preset-btn.active{background:var(--lego-blue);color:#fff;border-color:#fff}
+  .preset-btn.active .preset-desc{color:#e0f2fe}
+  .preset-desc{color:var(--ink-dim);font-size:13px;margin-top:4px}
+
+  .layout{display:grid;grid-template-columns:1fr 380px;gap:16px}
+  @media (max-width:1100px){.layout{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:3px solid var(--lego-black);border-radius:12px;padding:16px;box-shadow:0 4px 0 rgba(0,0,0,.15)}
+  .card h3{margin:0 0 12px 0;display:flex;align-items:center;gap:8px}
+  .muted{color:var(--ink-dim)}
+
+  .tooltip{position:relative;display:inline-flex;align-items:center;gap:4px;cursor:help}
+  .tooltip .icon{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;
+                 border-radius:50%;background:var(--lego-blue);color:#fff;font-size:11px;font-weight:800}
+  .tooltip:hover .tip{opacity:1;visibility:visible;transform:translateY(0)}
+  .tip{position:absolute;bottom:100%;left:50%;transform:translateX(-50%) translateY(4px);
+       background:var(--lego-black);color:#fff;padding:8px 12px;border-radius:8px;font-size:12px;
+       white-space:nowrap;opacity:0;visibility:hidden;transition:all 200ms;margin-bottom:8px;z-index:100;
+       box-shadow:0 4px 12px rgba(0,0,0,.3);max-width:280px;white-space:normal;line-height:1.4}
+
+  .controls{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media (max-width:640px){.controls{grid-template-columns:1fr}}
+  label{font-size:13px;color:var(--ink-dim);font-weight:600}
+  .control{display:flex;flex-direction:column;gap:6px}
+  .toggles-grid{grid-template-columns:1fr !important}
+  .control-checkbox{flex-direction:row;align-items:flex-start;gap:10px}
+  .control-checkbox label{font-weight:700;font-size:13px;color:var(--ink);display:flex;align-items:center;gap:8px}
+  .control-checkbox input[type=checkbox]{appearance:none;width:20px;height:20px;border:2px solid var(--lego-black);
+                                         border-radius:6px;display:inline-block;position:relative;background:#fff;cursor:pointer}
+  .control-checkbox input[type=checkbox]:checked{background:var(--lego-green)}
+  .control-checkbox input[type=checkbox]:checked::after{content:'✓';position:absolute;left:50%;top:50%;
+                                                        transform:translate(-50%,-55%);color:#fff;font-size:12px;font-weight:800}
+  .control-checkbox input[type=checkbox]:disabled{opacity:0.5;cursor:not-allowed}
+  .control-checkbox .toggle-notes{font-size:12px;color:var(--ink-dim);margin-left:28px}
+  input,select{width:100%;padding:10px 12px;border:2px solid var(--lego-black);border-radius:10px;background:#fff;
+               color:var(--ink);font-weight:600;line-height:1.2;min-height:42px}
+  input:focus,select:focus{outline:3px solid var(--lego-blue);outline-offset:2px}
+  select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--lego-black) 50%),
+                             linear-gradient(135deg,var(--lego-black) 50%,transparent 50%);
+         background-position:calc(100% - 18px) 18px, calc(100% - 12px) 18px;
+         background-size:6px 6px,6px 6px;background-repeat:no-repeat;padding-right:32px}
+
+  .arch-visual{margin:16px 0;padding:20px;background:#f8fafc;border:2px dashed var(--line);border-radius:12px}
+  .flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center}
+  .flow-block{padding:8px 14px;border-radius:8px;border:2px solid var(--lego-black);background:#fff;
+              font-size:13px;font-weight:700;box-shadow:0 2px 0 rgba(0,0,0,.1)}
+  .flow-block.active{background:var(--lego-green);color:#fff}
+  .flow-block.neutral{background:#e2e8f0;border-color:var(--line);color:var(--ink);box-shadow:none}
+  .flow-arrow{font-size:18px;color:var(--ink-dim)}
+
+  .kpi{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+  .kpi .item{background:linear-gradient(135deg, #fffef8 0%, #fffbe6 100%);
+             border:3px solid var(--lego-black);border-radius:10px;padding:12px;
+             box-shadow:0 3px 0 rgba(0,0,0,.12)}
+  .kpi .big{font-size:1.3rem;font-weight:800;margin-top:4px}
+  .kpi .label{font-size:12px;color:var(--ink-dim);font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+
+  .benchmark{background:#e0f2fe;border:2px solid #0369a1;border-radius:8px;padding:10px;margin:12px 0;font-size:13px}
+  .benchmark strong{color:#0c4a6e}
+
+  .comparison{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}
+  @media (max-width:640px){.comparison{grid-template-columns:1fr}}
+  .comp-card{border:2px solid var(--line);border-radius:10px;padding:12px;background:#fafafa}
+  .comp-card.highlight{border-color:var(--lego-blue);background:#eff6ff}
+  .comp-value{font-size:18px;font-weight:800;margin:6px 0}
+  .comp-label{font-size:12px;color:var(--ink-dim)}
+
+  .bar{height:24px;border-radius:12px;border:2px solid var(--lego-black);overflow:hidden;background:#f1f5f9;display:flex}
+  .bar>div{height:100%;transition:width 300ms ease}
+  .legend{margin-top:10px}
+  .legend .row{display:flex;justify-content:space-between;align-items:center;font-size:13px;margin:6px 0;
+               padding:4px;border-radius:4px}
+  .legend .row:hover{background:#f8fafc}
+  .legend .label{display:flex;align-items:center;gap:8px;font-weight:600}
+  .legend .dot{display:inline-block;width:14px;height:14px;border:2px solid var(--lego-black);border-radius:3px}
+
+  details{margin-top:12px;border-top:2px solid var(--line);padding-top:12px}
+  summary{cursor:pointer;font-weight:700;padding:8px 0;user-select:none;list-style:none}
+  summary::-webkit-details-marker{display:none}
+  summary:before{content:'▶';display:inline-block;margin-right:6px;transition:transform 200ms}
+  details[open] summary:before{transform:rotate(90deg)}
+
+  table{width:100%;border-collapse:collapse;margin-top:12px}
+  th,td{border-bottom:2px solid var(--line);padding:10px 8px;text-align:left}
+  th{background:#fffbe6;font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+  td{font-size:13px}
+  .notes{color:var(--ink-dim);font-size:12px}
+
+  .alert{background:#fef3c7;border:2px solid #f59e0b;border-radius:10px;padding:12px;margin:12px 0;font-size:13px}
+  .alert strong{color:#92400e}
+
+  @media (max-width:1100px){
+    .layout{grid-template-columns:1fr}
+    .side{margin-top:16px}
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div class="brand">
+        <div class="badge">🧱</div>
+        <div>
+          <div class="title">RAG Architecture TCO Calculator</div>
+          <div class="muted" style="font-size:13px">Compare costs across different retrieval architectures</div>
+        </div>
+      </div>
+      <button class="reset-btn" id="resetBtn" type="button">♻️ Reset</button>
+    </div>
+
+    <div class="presets">
+      <button class="preset-btn active" data-preset="longContext">
+        🧵 Long-Context (Gemini)
+        <div class="preset-desc">Large context window, no retrieval</div>
+      </button>
+      <button class="preset-btn" data-preset="classicRag">
+        🎯 Classic RAG
+        <div class="preset-desc">Dense retrieval with vector DB</div>
+      </button>
+      <button class="preset-btn" data-preset="hybridRag">
+        ⚖️ Hybrid RAG
+        <div class="preset-desc">Prefilter + dense + reranker</div>
+      </button>
+      <button class="preset-btn" data-preset="agenticRag">
+        🤖 Agentic RAG
+        <div class="preset-desc">Multi-step orchestration + tools</div>
+      </button>
+    </div>
+
+    <div class="layout">
+      <div class="left">
+        <div class="card">
+          <h3>📊 Scenario Configuration</h3>
+          <div class="controls">
+            <div class="control">
+              <label class="tooltip">
+                Conversations per month
+                <span class="icon">?</span>
+                <span class="tip">Total number of user conversations (each may have multiple turns)</span>
+              </label>
+              <input id="convM" type="number" min="100" max="10000000" value="30000">
+            </div>
+            <div class="control">
+              <label class="tooltip">
+                Active users per month
+                <span class="icon">?</span>
+                <span class="tip">Unique users engaging with your chatbot</span>
+              </label>
+              <input id="users" type="number" min="10" max="1000000" value="10000">
+            </div>
+            <div class="control">
+              <label class="tooltip">
+                LLM Provider & Model
+                <span class="icon">?</span>
+                <span class="tip">The language model powering your responses</span>
+              </label>
+              <select id="model"></select>
+            </div>
+            <div class="control">
+              <label class="tooltip">
+                Average turns per conversation
+                <span class="icon">?</span>
+                <span class="tip">Back-and-forth exchanges (2 = one question + one follow-up)</span>
+              </label>
+              <input id="turns" type="number" min="1" max="20" value="2">
+            </div>
+          </div>
+
+          <details>
+            <summary>⚙️ Advanced Token & Retrieval</summary>
+            <div class="controls toggles-grid" style="margin-top:12px">
+              <div class="control">
+                <label class="tooltip">
+                  Prompt-cache price factor (0–1)
+                  <span class="icon">?</span>
+                  <span class="tip">Cached input tokens billed at this fraction of input rate (e.g., 0.5).</span>
+                </label>
+                <input id="cachedFactor" type="number" min="0" max="1" step="0.05" value="0.5">
+              </div>
+              <div class="control">
+                <label class="tooltip">
+                  Cross-conversation dedupe H
+                  <span class="icon">?</span>
+                  <span class="tip">Proportion of API calls eliminated via shared cache/templates (reduces total turns).</span>
+                </label>
+                <input id="crossH" type="number" min="0" max="1" step="0.05" value="0.35">
+              </div>
+              <div class="control">
+                <label>System prompt tokens</label>
+                <input id="sys" type="number" min="0" max="10000" value="300">
+              </div>
+              <div class="control">
+                <label>User message avg tokens</label>
+                <input id="umsg" type="number" min="10" max="5000" value="120">
+              </div>
+              <div class="control">
+                <label>RAG chunks per turn</label>
+                <input id="chunks" type="number" min="0" max="20" value="3">
+              </div>
+              <div class="control">
+                <label>Tokens per chunk</label>
+                <input id="chunkTok" type="number" min="0" max="2000" value="200">
+              </div>
+              <div class="control">
+                <label class="tooltip">
+                  RAG chunk reuse rate
+                  <span class="icon">?</span>
+                  <span class="tip">How often chunks persist across turns (0.6 = 60% reused as cached context)</span>
+                </label>
+                <input id="reuse" type="number" min="0" max="1" step="0.05" value="0.6">
+              </div>
+              <div class="control">
+                <label class="tooltip">
+                  Reasoning multiplier
+                  <span class="icon">?</span>
+                  <span class="tip">Multiplier on output tokens to capture “thinking” (1.0 = standard, 3.0 = deeper)</span>
+                </label>
+                <input id="reason" type="number" step="0.5" min="1" max="10" value="1.0">
+              </div>
+              <div class="control">
+                <label class="tooltip">
+                  Embed user query each turn
+                  <span class="icon">?</span>
+                  <span class="tip">Vector search usually embeds the user query. Turn off for LLM-only flows.</span>
+                </label>
+                <select id="embedQuery">
+                  <option value="yes" selected>Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </div>
+              <div class="control">
+                <label>Query embedding tokens / turn</label>
+                <input id="embedQueryTok" type="number" min="0" value="120">
+              </div>
+              <div class="control">
+                <label>Docs to embed (one-time)</label>
+                <input id="embDocs" type="number" min="0" value="1000">
+              </div>
+              <div class="control">
+                <label>Avg tokens per doc</label>
+                <input id="embTok" type="number" min="0" value="800">
+              </div>
+            </div>
+          </details>
+
+          <details>
+            <summary>🧾 Project Setup & Staffing</summary>
+            <div class="controls toggles-grid" style="margin-top:12px">
+              <div class="control">
+                <label class="tooltip">
+                  Initial setup (one‑time, $)
+                  <span class="icon">?</span>
+                  <span class="tip">One‑time professional services to go live. Corpus embedding is modeled separately.</span>
+                </label>
+                <input id="setupOneTime" type="number" min="0" step="50" value="8000">
+              </div>
+            </div>
+            <details style="margin-top:10px">
+              <summary>Breakdown (time & materials)</summary>
+              <div class="controls toggles-grid" style="margin-top:12px">
+                <div class="control">
+                  <label>PM — Hours</label>
+                  <input id="setupPmHours" type="number" min="0" step="0.5" value="3">
+                </div>
+                <div class="control">
+                  <label>PM — Rate</label>
+                  <input id="setupPmRate" type="number" min="0" step="10" value="720">
+                </div>
+                <div class="control">
+                  <label>Architect — Hours</label>
+                  <input id="setupArchHours" type="number" min="0" step="0.5" value="4">
+                </div>
+                <div class="control">
+                  <label>Architect — Rate</label>
+                  <input id="setupArchRate" type="number" min="0" step="10" value="880">
+                </div>
+                <div class="control">
+                  <label>AI Engineer — Hours</label>
+                  <input id="setupAiHours" type="number" min="0" step="0.5" value="2">
+                </div>
+                <div class="control">
+                  <label>AI Engineer — Rate</label>
+                  <input id="setupAiRate" type="number" min="0" step="10" value="880">
+                </div>
+                <div class="control">
+                  <label>Project Director — Hours</label>
+                  <input id="setupDirHours" type="number" min="0" step="0.5" value="0">
+                </div>
+                <div class="control">
+                  <label>Project Director — Rate</label>
+                  <input id="setupDirRate" type="number" min="0" step="10" value="880">
+                </div>
+                <div class="control">
+                  <label>Contingency (%)</label>
+                  <input id="setupContPct" type="number" min="0" step="0.5" value="7.5">
+                </div>
+                <div class="control">
+                  <label>Subtotal (hours × rate)</label>
+                  <div id="setupSubTotal" style="font-weight:700">$0</div>
+                </div>
+                <div class="control">
+                  <label>Total with contingency</label>
+                  <div id="setupGrandTotal" style="font-weight:700">$0</div>
+                </div>
+                <div class="control" style="grid-column:1/-1">
+                  <button id="applySetupBtn" type="button" class="preset-btn">Apply to Initial setup</button>
+                </div>
+              </div>
+            </details>
+          </details>
+
+          <details>
+            <summary>🧩 Architecture Options</summary>
+            <div class="controls" style="margin-top:12px">
+              <div class="control control-checkbox">
+                <label><input type="checkbox" id="toggle-monitor"> Monitoring & Observability</label>
+                <div class="toggle-notes">Include dashboards, logs, and alerting budget.</div>
+              </div>
+              <div class="control control-checkbox">
+                <label><input type="checkbox" id="toggle-governance"> Governance (Moderation + PII)</label>
+                <div class="toggle-notes">Adds content moderation and PII detection services.</div>
+              </div>
+              <div class="control control-checkbox">
+                <label><input type="checkbox" id="toggle-tools"> Tools & API Invocations</label>
+                <div class="toggle-notes">Charge for agent tool calls / external APIs.</div>
+              </div>
+            </div>
+          </details>
+
+          <details>
+            <summary>🏷️ Vendor Presets</summary>
+            <div class="controls toggles-grid" style="margin-top:12px">
+              <div class="control">
+                <label>Embedding model</label>
+                <select id="embeddingPreset"></select>
+                <div class="notes" id="embeddingNote"></div>
+              </div>
+              <div class="control">
+                <label>Vector DB preset</label>
+                <select id="vectorPreset"></select>
+                <div class="notes" id="vectorNote"></div>
+              </div>
+              <div class="control">
+                <label>Infrastructure preset</label>
+                <select id="infraPreset"></select>
+                <div class="notes" id="infraNote"></div>
+              </div>
+              <div class="control">
+                <label>Monitoring preset</label>
+                <select id="monitorPreset"></select>
+                <div class="notes" id="monitorNote"></div>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <h3>🏗️ Architecture Visualization</h3>
+          <div class="arch-visual">
+            <div class="flow" id="archFlow"></div>
+          </div>
+          <div class="muted" style="font-size:12px;text-align:center">Active components shown in green • Click presets above to see different architectures</div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <h3>💰 Cost Breakdown</h3>
+          <div id="groups"></div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <details id="assumptionDetails" open>
+            <summary style="font-weight:700;cursor:pointer">🔍 Assumptions & Sources</summary>
+            <div id="assumptionPanel" class="notes" style="margin-top:8px;display:flex;flex-direction:column;gap:8px"></div>
+          </details>
+        </div>
+      </div>
+
+      <div class="side">
+        <div class="card">
+          <h3>📈 Key Metrics</h3>
+          <div class="kpi">
+            <div class="item">
+              <div class="label">Annual Total</div>
+              <div class="big" id="kAnnual">$0</div>
+            </div>
+            <div class="item">
+              <div class="label">Monthly Run-Rate</div>
+              <div class="big" id="kMonthly">$0</div>
+            </div>
+            <div class="item">
+              <div class="label">First Month</div>
+              <div class="big" id="kM1">$0</div>
+            </div>
+            <div class="item">
+              <div class="label">Per Conversation</div>
+              <div class="big" id="kUnit">$0</div>
+            </div>
+            <div class="item">
+              <div class="label">Per Active User / Mo <span class="help" title="Definition: Monthly run‑rate divided by active users. Monthly run‑rate = variable (usage) + recurring (monthly); excludes one‑time costs. If users = 0, shows —.">ℹ️</span></div>
+              <div class="big" id="kUser">$0</div>
+            </div>
+          </div>
+
+          <details>
+            <summary>Show math</summary>
+            <div id="math" class="notes"></div>
+          </details>
+
+          <div class="benchmark" id="benchmark" style="display:none"></div>
+
+          <div class="muted" style="margin:16px 0 8px 0;font-weight:600">Annual Cost Composition</div>
+          <div id="barAnnual"></div>
+
+          <div class="alert" id="warnings" style="display:none"></div>
+
+          <div class="comparison" id="comparison" style="display:none"></div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <h3>ℹ️ Current Setup</h3>
+          <div style="display:flex;flex-direction:column;gap:12px;font-size:13px">
+            <div>
+              <div class="muted">Architecture</div>
+              <div style="font-weight:700" id="aArch"></div>
+            </div>
+            <div>
+              <div class="muted">Model</div>
+              <div style="font-weight:700" id="aModel"></div>
+              <div class="notes" id="aPrices"></div>
+            </div>
+            <div>
+              <div class="muted">Conversation Pattern</div>
+              <div id="aConv"></div>
+              <div class="notes" id="aRag"></div>
+            </div>
+            <div>
+              <div class="muted">Active Users</div>
+              <div id="aUsers"></div>
+            </div>
+            <div>
+              <div class="muted">Agent Steps</div>
+              <div id="aAgent"></div>
+            </div>
+            <div>
+              <div class="muted">Caching Strategy</div>
+              <div id="aCache"></div>
+            </div>
+            <div>
+              <div class="muted">Data Source</div>
+              <div class="notes">Rates shown in “Assumptions & Sources” come from the embedded pricing tables—tune them to mirror your vendors.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="alert">
+          <strong>💡 Tip:</strong> Try different presets above to see how architecture choices impact costs. Production setups typically add observability & governance.
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const format$=v=>{
+  const value=Number.isFinite(v)?v:0;
+  return '$'+(value>=1000? value.toLocaleString(undefined,{maximumFractionDigits:0}) : value.toFixed(2));
+};
+const formatNum=v=>Number.isFinite(v)?Math.round(v).toLocaleString(undefined,{maximumFractionDigits:0}):'0';
+const clamp=(v,min,max)=>Math.min(Math.max(v,min),max);
+const formatTokens=v=>`${Math.round(v)}t`;
+
+// Pricing catalog (LLMs & embeddings) with provenance
+const PRICING={
+  llm:{
+    openai:{
+      'gpt-4o-mini':{displayName:'GPT-4o Mini',input:0.150,output:0.600,cachedInputFactor:0.5,contextWindow:128000,lastUpdated:'2025-01-01',source:'OpenAI pricing snapshot (Jan 2025)'},
+      'gpt-4o':{displayName:'GPT-4o',input:2.500,output:10.000,cachedInputFactor:0.5,contextWindow:128000,lastUpdated:'2025-01-01',source:'OpenAI pricing snapshot (Jan 2025)'},
+      'gpt-5':{displayName:'GPT-5',input:1.250,output:10.000,cachedInputFactor:0.5,contextWindow:128000,lastUpdated:'2025-01-01',source:'OpenAI pricing snapshot (Jan 2025)'}
+    },
+    google:{
+      'gemini-2.5-pro':{displayName:'Gemini 2.5 Pro',input:1.250,output:10.000,cachedInputFactor:0.5,contextWindow:1000000,lastUpdated:'2025-01-01',source:'Google AI Studio pricing (Jan 2025)'},
+      'gemini-2.5-flash':{displayName:'Gemini 2.5 Flash',input:0.300,output:2.500,cachedInputFactor:0.5,contextWindow:1000000,lastUpdated:'2025-01-01',source:'Google AI Studio pricing (Jan 2025)'},
+      'gemini-1.5-pro':{displayName:'Gemini 1.5 Pro',input:3.000,output:15.000,cachedInputFactor:0.5,contextWindow:1000000,lastUpdated:'2025-01-01',source:'Google AI Studio pricing (Jan 2025)'}
+    },
+    anthropic:{
+      'claude-opus-4':{displayName:'Claude Opus 4 / 4.1',input:15.000,output:75.000,cachedInputFactor:0.1,contextWindow:200000,lastUpdated:'2025-01-01',source:'Anthropic Claude pricing (Jan 2025)'},
+      'claude-sonnet-4':{displayName:'Claude Sonnet 4',input:3.000,output:15.000,cachedInputFactor:0.1,contextWindow:1000000,lastUpdated:'2025-01-01',source:'Anthropic Claude pricing (Jan 2025)'},
+      'claude-haiku':{displayName:'Claude Haiku',input:1.000,output:5.000,cachedInputFactor:0.1,contextWindow:200000,lastUpdated:'2025-01-01',source:'Anthropic Claude pricing (Jan 2025)'}
+    },
+    mistral:{
+      'mistral-large-2411':{displayName:'Mistral Large 2411',input:2.000,output:6.000,cachedInputFactor:0.5,contextWindow:32000,lastUpdated:'2025-01-01',source:'Mistral pricing trackers (Jan 2025)'},
+      'mistral-medium-3':{displayName:'Mistral Medium 3',input:0.400,output:2.000,cachedInputFactor:0.5,contextWindow:128000,lastUpdated:'2025-01-01',source:'Mistral pricing trackers (Jan 2025)'},
+      'mistral-small':{displayName:'Mistral Small',input:0.100,output:0.300,cachedInputFactor:0.5,contextWindow:128000,lastUpdated:'2025-01-01',source:'Mistral pricing trackers (Jan 2025)'}
+    },
+    qwen:{
+      'qwen3-235b-instruct':{displayName:'Qwen3 235B Instruct',input:0.200,output:0.600,cachedInputFactor:0.5,contextWindow:400000,lastUpdated:'2025-01-01',source:'Qwen pricing sheets (Jan 2025)'},
+      'qwen3-235b-thinking':{displayName:'Qwen3 235B Thinking',input:0.650,output:3.000,cachedInputFactor:0.5,contextWindow:400000,lastUpdated:'2025-01-01',source:'Qwen pricing sheets (Jan 2025)'},
+      'qwen-262k':{displayName:'Qwen 262K Context',input:0.071,output:0.285,cachedInputFactor:0.5,contextWindow:262000,lastUpdated:'2025-01-01',source:'Qwen pricing sheets (Jan 2025)'}
+    },
+    xai:{
+      'grok-3':{displayName:'Grok 3',input:3.000,output:15.000,cachedInputFactor:0.5,contextWindow:131072,lastUpdated:'2025-01-01',source:'xAI pricing (Jan 2025)'},
+      'grok-4':{displayName:'Grok 4',input:3.000,output:15.000,cachedInputFactor:0.5,contextWindow:131072,lastUpdated:'2025-01-01',source:'xAI pricing (Jan 2025)'},
+      'grok-3-fast':{displayName:'Grok 3 Fast/Mini',input:0.400,output:2.000,cachedInputFactor:0.5,contextWindow:131072,lastUpdated:'2025-01-01',source:'xAI pricing (Jan 2025)'}
+    }
+  },
+  embeddings:{
+    'openai:text-embedding-3-small':{label:'OpenAI • text-embedding-3-small',provider:'OpenAI',pricePerM:0.02,lastUpdated:'2025-10-30',source:'OpenAI pricing (Oct 2025)'},
+    'openai:text-embedding-3-large':{label:'OpenAI • text-embedding-3-large',provider:'OpenAI',pricePerM:0.13,lastUpdated:'2025-10-30',source:'OpenAI pricing (Oct 2025)'},
+    'cohere:embed-english-v3':{label:'Cohere • embed-english-v3',provider:'Cohere',pricePerM:0.12,lastUpdated:'2025-10-30',source:'Cohere pricing (Oct 2025)'},
+    'cohere:embed-4-multilingual':{label:'Cohere • embed-4-multilingual',provider:'Cohere',pricePerM:0.12,lastUpdated:'2025-10-30',source:'Cohere pricing (Oct 2025)'},
+    'mistral:embed-english':{label:'Mistral • embed-english',provider:'Mistral AI',pricePerM:0.10,lastUpdated:'2025-10-30',source:'Mistral pricing trackers (Oct 2025)'},
+    'google:textembedding-005':{label:'Google • textembedding-005',provider:'Google',pricePerM:0.10,lastUpdated:'2025-10-30',source:'Google AI Studio pricing (Oct 2025)'}
+  }
+};
+
+const EMBEDDING_DEFAULT='openai:text-embedding-3-small';
+
+const VENDOR_PRESETS={
+  vectorDb:{
+    custom:{label:'Custom (manual rates)'},
+    'pinecone:starter':{label:'Pinecone • Starter',monthly:25,notes:'Shared environment (~5GB) • org minimum often $50/mo.',source:'Pinecone pricing digests, Aug–Oct 2025'},
+    'pinecone:standard':{label:'Pinecone • Standard pod',monthly:70,notes:'Single p1/s1 pod (~$0.096/h). Adjust for your region & replicas.',source:'Pinecone pricing digests, Aug–Oct 2025'},
+    'weaviate:standard':{label:'Weaviate • Serverless standard',monthly:25,notes:'Pay-as-you-go serverless tier (new Oct 2025).',source:'Weaviate pricing, Oct 27 2025'},
+    'qdrant:cloud-small':{label:'Qdrant Cloud • Small',monthly:12,notes:'Entry cloud plan ≥10GB (~$0.014/h).',source:'Qdrant Cloud pricing, Oct 2025'}
+  },
+  infrastructure:{
+    custom:{label:'Custom (manual rates)'},
+    'infra:serverless':{label:'Serverless baseline',monthly:100,notes:'AWS Lambda / Cloudflare Workers / GCP Functions. Bandwidth extra.',source:'AWS/GCP/Azure examples (Oct 2025)'},
+    'infra:standard':{label:'Container / App platform',monthly:300,notes:'ECS / Cloud Run / App Platform for higher traffic.',source:'Cloud provider pricing (Oct 2025)'},
+    'infra:dedicated':{label:'Dedicated / reserved',monthly:800,notes:'Reserved instances/VMs + networking stack.',source:'Cloud provider pricing (Oct 2025)'},
+    'infra:do-app-basic':{label:'DigitalOcean App Platform Basic',monthly:20,notes:'Small DO App Platform service.',source:'DigitalOcean App Platform pricing (Oct 2025)'},
+    'infra:do-app-pro':{label:'DigitalOcean App Platform Pro',monthly:50,notes:'DO App Platform Pro small service.',source:'DigitalOcean App Platform pricing (Oct 2025)'}
+  },
+  monitoring:{
+    custom:{label:'Custom (manual rates)'},
+    'monitor:basic':{label:'Cloud native (CloudWatch / Log Analytics)',monthly:0,notes:'Use built-in cloud logging; enter per-call costs manually if desired.'},
+    'monitor:datadog':{label:'Datadog Infrastructure + APM',monthly:80,notes:'Approx. $15 infra + $31 APM per host × ~2 hosts.',source:'Datadog pricing (Oct 2025)'},
+    'monitor:langsmith':{label:'LangSmith managed traces',monthly:0,notes:'First 5k traces free, then ~$0.50 / 1k traces.',source:'LangSmith pricing (Oct 2025)'},
+    'monitor:wandb':{label:'Weights & Biases Starter',monthly:50,notes:'$50/user/mo (starter).',source:'W&B pricing (Oct 2025)'},
+    'monitor:arize':{label:'Arize AX Pro',monthly:50,notes:'Up to 5 users / 1M spans.',source:'Arize pricing (Oct 2025)'}
+  }
+};
+
+// Simple, transparent rate knobs you can tune
+const RATES={
+  vdb_storage_per_million_vectors:5.00,
+  vdb_reads_per_million:0.50,
+  infra_base_monthly:150,
+  infra_per_million_calls:5.00,
+  monitoring_base_monthly:60,
+  monitoring_per_million_calls:10.00,
+  reranker_per_thousand:0.002,
+  tools_per_thousand_calls:0.50,
+  
+};
+
+const COMPONENT_TOGGLES={
+  monitor:{id:'toggle-monitor',label:'Monitoring & Observability',description:'Include dashboards, logs, and alerting budget.'},
+  governance:{id:'toggle-governance',label:'Governance (Moderation + PII)',description:'Adds content moderation and PII detection services.'},
+  tools:{id:'toggle-tools',label:'Tools & API Invocations',description:'Charge for agent tool calls / external APIs.'},
+  
+};
+const TOGGLE_IDS=Object.fromEntries(Object.keys(COMPONENT_TOGGLES).map(key=>[COMPONENT_TOGGLES[key].id,key]));
+
+const COLORS={
+  'LLM API Cost':'#2563eb',
+  'Query Embeddings':'#0ea5e9',
+  'Initial Embedding':'#059669',
+  'Vector Database':'#10b981',
+  'Vector DB — Storage':'#10b981',
+  'Vector DB — Reads':'#34d399',
+  'Tools':'#0f766e',
+  'Hosting & Infrastructure':'#64748b',
+  'Monitoring & Observability':'#8b5cf6',
+  'Content Moderation':'#f59e0b',
+  'PII Detection':'#ea580c',
+  'Reranker':'#dc2626',
+  
+  'Initial Setup':'#eab308'
+};
+
+const ARCHITECTURES={
+  longContext:{
+    key:'longContext',
+    label:'Long-Context (Gemini)',
+    defaults:{
+      inputs:{
+        convM:30000,
+        users:10000,
+        turns:2,
+        crossH:0.35,
+        sys:300,
+        umsg:120,
+        chunks:3,
+        chunkTok:200,
+        reuse:0.6,
+        reason:1.0,
+        cachedFactor:0.5,
+        embedQuery:'no',
+        embedQueryTok:120,
+        embDocs:0,
+        embTok:0
+      },
+      toggles:{monitor:false,governance:false},
+      convPerUser:inputs=>inputs.users?inputs.convM/inputs.users:1
+    },
+    requireGemini:true,
+    agentSteps:1,
+    chunkReduction:0,
+    scaleVariableWithSteps:false,
+    scaleReadsWithSteps:false,
+    components:{
+      llm:true,
+      contextPack:true,
+      prefilter:false,
+      embedding:false,
+      vectorDb:false,
+      queryEmbedding:false,
+      reranker:false,
+      monitor:false,
+      governance:false,
+      tools:false,
+      
+    },
+    optionalToggles:['monitor','governance'],
+    flow:[
+      {label:'User'},
+      {label:'Context Pack (Long Document)',component:'contextPack'},
+      {label:'LLM (Gemini)',component:'llm'},
+      {label:'Response'}
+    ]
+  },
+  classicRag:{
+    key:'classicRag',
+    label:'Classic RAG',
+    defaults:{
+      inputs:{
+        convM:30000,
+        users:10000,
+        turns:2,
+        crossH:0.35,
+        sys:300,
+        umsg:120,
+        chunks:3,
+        chunkTok:200,
+        reuse:0.6,
+        reason:1.0,
+        cachedFactor:0.5,
+        embedQuery:'yes',
+        embedQueryTok:120,
+        embDocs:1000,
+        embTok:800
+      },
+      toggles:{monitor:false,governance:false},
+      convPerUser:inputs=>inputs.users?inputs.convM/inputs.users:1
+    },
+    requireGemini:false,
+    agentSteps:1,
+    chunkReduction:0,
+    scaleVariableWithSteps:true,
+    scaleReadsWithSteps:true,
+    components:{
+      llm:true,
+      contextPack:false,
+      prefilter:false,
+      embedding:true,
+      vectorDb:true,
+      queryEmbedding:true,
+      reranker:false,
+      monitor:false,
+      governance:false,
+      tools:false,
+      
+    },
+    optionalToggles:['monitor','governance'],
+    flow:[
+      {label:'User'},
+      {label:'Embedding',component:'embedding'},
+      {label:'Vector DB',component:'vectorDb'},
+      {label:'LLM',component:'llm'},
+      {label:'Monitor',component:'monitor'},
+      {label:'Response'}
+    ]
+  },
+  hybridRag:{
+    key:'hybridRag',
+    label:'Hybrid RAG',
+    defaults:{
+      inputs:{
+        convM:30000,
+        users:10000,
+        turns:3,
+        crossH:0.40,
+        sys:300,
+        umsg:120,
+        chunks:5,
+        chunkTok:200,
+        reuse:0.6,
+        reason:1.0,
+        cachedFactor:0.5,
+        embedQuery:'yes',
+        embedQueryTok:120,
+        embDocs:1000,
+        embTok:800
+      },
+      toggles:{monitor:true,governance:true},
+      convPerUser:inputs=>inputs.users?inputs.convM/inputs.users:1
+    },
+    requireGemini:false,
+    agentSteps:1,
+    chunkReduction:0.35,
+    scaleVariableWithSteps:true,
+    scaleReadsWithSteps:true,
+    components:{
+      llm:true,
+      contextPack:false,
+      prefilter:true,
+      embedding:true,
+      vectorDb:true,
+      queryEmbedding:true,
+      reranker:true,
+      monitor:true,
+      governance:true,
+      tools:false,
+      
+    },
+    optionalToggles:['monitor','governance'],
+    flow:[
+      {label:'User'},
+      {label:'Prefilter',component:'prefilter'},
+      {label:'Embedding',component:'embedding'},
+      {label:'Vector DB',component:'vectorDb'},
+      {label:'Reranker',component:'reranker'},
+      {label:'LLM',component:'llm'},
+      {label:'Monitor',component:'monitor'},
+      {label:'Response'}
+    ]
+  },
+  agenticRag:{
+    key:'agenticRag',
+    label:'Agentic RAG',
+    defaults:{
+      inputs:{
+        convM:30000,
+        users:10000,
+        turns:4,
+        crossH:0.30,
+        sys:300,
+        umsg:120,
+        chunks:7,
+        chunkTok:200,
+        reuse:0.6,
+        reason:2.5,
+        cachedFactor:0.5,
+        embedQuery:'yes',
+        embedQueryTok:120,
+        embDocs:1500,
+        embTok:800
+      },
+      toggles:{monitor:true,governance:true,tools:true},
+      convPerUser:inputs=>inputs.users?inputs.convM/inputs.users:1
+    },
+    requireGemini:false,
+    agentSteps:3,
+    chunkReduction:0.30,
+    scaleVariableWithSteps:true,
+    scaleReadsWithSteps:true,
+    components:{
+      llm:true,
+      contextPack:false,
+      prefilter:true,
+      embedding:true,
+      vectorDb:true,
+      queryEmbedding:true,
+      reranker:true,
+      monitor:true,
+      governance:true,
+      tools:true,
+      
+    },
+    optionalToggles:['monitor','governance','tools'],
+    flow:[
+      {label:'User'},
+      {label:'Prefilter',component:'prefilter'},
+      {label:'Embedding',component:'embedding'},
+      {label:'Vector DB',component:'vectorDb'},
+      {label:'Reranker',component:'reranker'},
+      {label:'LLM',component:'llm'},
+      {label:'Tools',component:'tools'},
+      {label:'Monitor',component:'monitor'},
+      {label:'Response'}
+    ]
+  }
+};
+
+const state={currentArchKey:null,arch:null,componentToggles:{},activeComponents:null,convPerUserRatio:1,autoSyncConv:true,embeddingKey:EMBEDDING_DEFAULT,vendorSelections:{vectorDb:'custom',infrastructure:'custom',monitoring:'custom'}};
+let suppressUserSync=false;
+let lastCalc=null;
+const WATCH_IDS=new Set(['convM','model','cachedFactor','users','turns','sys','umsg','crossH','chunks','chunkTok','reuse','reason','embedQuery','embedQueryTok','embDocs','embTok','setupOneTime']);
+
+function fillModels(){
+  const sel=$('model');
+  if(!sel)return;
+  const entries=[];
+  Object.keys(PRICING.llm).forEach(provider=>{
+    Object.keys(PRICING.llm[provider]).forEach(name=>{
+      const meta=PRICING.llm[provider][name];
+      const display=meta?.displayName||name;
+      const providerLabel=provider.charAt(0).toUpperCase()+provider.slice(1);
+      entries.push({id:`${provider}:${name}`,label:`${providerLabel} • ${display}`});
+    });
+  });
+  entries.sort((a,b)=>a.label.localeCompare(b.label));
+  entries.forEach(e=>{
+    const opt=document.createElement('option');
+    opt.value=e.id;
+    opt.textContent=e.label;
+    sel.appendChild(opt);
+  });
+  if(entries.length){sel.value=entries[0].id;}
+}
+
+function fillEmbeddingOptions(){
+  const sel=$('embeddingPreset');
+  if(!sel)return;
+  sel.innerHTML='';
+  const entries=Object.entries(PRICING.embeddings).map(([key,meta])=>({id:key,label:meta.label||key}));
+  entries.sort((a,b)=>a.label.localeCompare(b.label));
+  entries.forEach(entry=>{
+    const opt=document.createElement('option');
+    opt.value=entry.id;
+    opt.textContent=entry.label;
+    sel.appendChild(opt);
+  });
+}
+
+function fillVendorPresetSelect(kind,selectId){
+  const sel=$(selectId);
+  if(!sel)return;
+  sel.innerHTML='';
+  const presets=VENDOR_PRESETS[kind];
+  Object.entries(presets).forEach(([key,meta])=>{
+    const opt=document.createElement('option');
+    opt.value=key;
+    opt.textContent=meta.label||key;
+    sel.appendChild(opt);
+  });
+}
+
+function getEmbeddingMeta(){
+  return PRICING.embeddings[state.embeddingKey]||null;
+}
+
+function formatVendorNote(preset){
+  if(!preset)return '';
+  const parts=[];
+  if(preset.notes)parts.push(preset.notes);
+  if(preset.source)parts.push(`Source: ${preset.source}`);
+  if(preset.lastUpdated)parts.push(`Last updated ${preset.lastUpdated}`);
+  return parts.join(' • ');
+}
+
+function updatePresetNotes(){
+  const embeddingMeta=getEmbeddingMeta();
+  const embeddingNote=$('embeddingNote');
+  if(embeddingNote){
+    if(embeddingMeta){
+      const pieces=[`$${embeddingMeta.pricePerM}/M tokens (${embeddingMeta.provider})`];
+      if(embeddingMeta.source)pieces.push(`Source: ${embeddingMeta.source}`);
+      if(embeddingMeta.lastUpdated)pieces.push(`Updated ${embeddingMeta.lastUpdated}`);
+      embeddingNote.textContent=pieces.join(' • ');
+    }else{
+      embeddingNote.textContent='No embedding price selected.';
+    }
+  }
+
+  const vectorPreset=VENDOR_PRESETS.vectorDb[state.vendorSelections.vectorDb];
+  const infraPreset=VENDOR_PRESETS.infrastructure[state.vendorSelections.infrastructure];
+  const monitorPreset=VENDOR_PRESETS.monitoring[state.vendorSelections.monitoring];
+  const vectorNote=$('vectorNote');
+  if(vectorNote){
+    vectorNote.textContent=vectorPreset&&state.vendorSelections.vectorDb!=='custom'?formatVendorNote(vectorPreset):'Define storage/read rates manually below.';
+  }
+  const infraNote=$('infraNote');
+  if(infraNote){
+    infraNote.textContent=infraPreset&&state.vendorSelections.infrastructure!=='custom'?formatVendorNote(infraPreset):'Use the rate knobs for base + per-call infra costs.';
+  }
+  const monitorNote=$('monitorNote');
+  if(monitorNote){
+    monitorNote.textContent=monitorPreset&&state.vendorSelections.monitoring!=='custom'?formatVendorNote(monitorPreset):'Use manual monitoring base/per-call rates.';
+  }
+}
+
+function onEmbeddingPresetChange(){
+  const sel=$('embeddingPreset');
+  if(!sel)return;
+  state.embeddingKey=sel.value;
+  updatePresetNotes();
+  recalc();
+}
+
+function onVendorPresetChange(kind,selectId){
+  const sel=$(selectId);
+  if(!sel)return;
+  state.vendorSelections[kind]=sel.value;
+  updatePresetNotes();
+  recalc();
+}
+
+function enforceModelConstraint(arch){
+  const sel=$('model');
+  if(!sel)return;
+  const requireGemini=!!arch.requireGemini;
+  const options=Array.from(sel.options||[]);
+  options.forEach(opt=>{
+    const isGemini=/^google:gemini/.test(opt.value);
+    opt.disabled=requireGemini && !isGemini;
+    opt.hidden=requireGemini && !isGemini;
+  });
+  if(requireGemini){
+    const allowed=options.find(opt=>!opt.disabled);
+    if(allowed){sel.value=allowed.value;}
+  }else{
+    options.forEach(opt=>{opt.disabled=false;opt.hidden=false;});
+  }
+}
+
+function enforceEmbeddingToggle(arch){
+  const sel=$('embedQuery');
+  const tok=$('embedQueryTok');
+  if(!sel||!tok)return;
+  if(arch.components.queryEmbedding){
+    sel.disabled=false;
+    tok.disabled=false;
+  }else{
+    sel.value='no';
+    sel.disabled=true;
+    tok.disabled=true;
+  }
+}
+
+function setInputValue(id,value){
+  const el=$(id);
+  if(!el || value===undefined)return;
+  if(el.type==='checkbox'){
+    el.checked=value===true || value==='true' || value==='on' || value===1 || value==='1';
+  }else{
+    el.value=value;
+  }
+}
+
+function setSelectValue(id,value){
+  const el=$(id);
+  if(!el || value===undefined)return;
+  el.value=value;
+}
+
+// Setup (time & materials) mini-calculator helpers
+function getNum(id){
+  const el=$(id); return Math.max(0, +(el?el.value:0) || 0);
+}
+function computeSetupTM(){
+  const pm = getNum('setupPmHours') * getNum('setupPmRate');
+  const arch = getNum('setupArchHours') * getNum('setupArchRate');
+  const ai = getNum('setupAiHours') * getNum('setupAiRate');
+  const dir = getNum('setupDirHours') * getNum('setupDirRate');
+  const sub = pm + arch + ai + dir;
+  const cont = getNum('setupContPct');
+  const total = sub * (1 + cont/100);
+  return {sub,total};
+}
+function updateSetupCalcUI(){
+  const {sub,total}=computeSetupTM();
+  const subEl=$('setupSubTotal'); if(subEl) subEl.textContent=format$(sub);
+  const totEl=$('setupGrandTotal'); if(totEl) totEl.textContent=format$(total);
+  const setupEl=$('setupOneTime');
+  if(setupEl){
+    const prev=+setupEl.value||0;
+    const next=Math.round(total);
+    if(prev!==next){
+      setupEl.value=next;
+      setupEl.dispatchEvent(new Event('input',{bubbles:true}));
+    }
+  }
+}
+function applySetupFromCalc(){
+  const {total}=computeSetupTM();
+  const setupEl=$('setupOneTime');
+  if(setupEl){
+    setupEl.value = Math.round(total);
+    setupEl.dispatchEvent(new Event('input',{bubbles:true}));
+  }
+}
+
+function configureTogglesForArch(arch){
+  const optional=new Set(arch.optionalToggles||[]);
+  const defaults=(arch.defaults&&arch.defaults.toggles)||{};
+  Object.entries(COMPONENT_TOGGLES).forEach(([key,meta])=>{
+    const checkbox=$(meta.id);
+    if(!checkbox)return;
+    const defaultValue = Object.prototype.hasOwnProperty.call(defaults,key)
+      ? !!defaults[key]
+      : !!arch.components[key];
+    const notes=checkbox.closest('.control-checkbox')?.querySelector('.toggle-notes');
+    if(optional.has(key)){
+      state.componentToggles[key]=defaultValue;
+      checkbox.disabled=false;
+      checkbox.checked=defaultValue;
+      if(notes){
+        if(!notes.dataset.base)notes.dataset.base=COMPONENT_TOGGLES[key].description||notes.textContent;
+        notes.textContent=COMPONENT_TOGGLES[key].description||notes.dataset.base;
+      }
+    }else{
+      checkbox.disabled=true;
+      checkbox.checked=defaultValue;
+      delete state.componentToggles[key];
+      if(notes){
+        if(!notes.dataset.base)notes.dataset.base=COMPONENT_TOGGLES[key].description||notes.textContent;
+        notes.textContent=`${notes.dataset.base} (not available for this architecture)`;
+      }
+    }
+  });
+}
+
+function syncTogglesFromInputs(){
+  Object.entries(TOGGLE_IDS).forEach(([id,key])=>{
+    const el=$(id);
+    if(!el)return;
+    if(el.disabled){
+      delete state.componentToggles[key];
+    }else{
+      state.componentToggles[key]=el.checked;
+    }
+  });
+}
+
+function convAverages(p){
+  const x=Object.assign({turns:1,sysPromptTokens:0,avgUserMsgTokens:100,ragChunksPerTurn:0,ragTokensPerChunk:0,ragReuse:0,baseOutputTokens:220,reasoningOutputMultiplier:1},p||{});
+  const ragPerTurn=x.ragChunksPerTurn*x.ragTokensPerChunk;
+  let fresh=0,cached=0,out=0;
+  for(let t=1;t<=x.turns;t++){
+    const first=(t===1);
+    const ragFresh= first ? ragPerTurn : ragPerTurn*(1-x.ragReuse);
+    const ragCached= first ? 0 : ragPerTurn*x.ragReuse;
+    fresh += x.avgUserMsgTokens + ragFresh;
+    cached += x.sysPromptTokens + ragCached;
+    out += x.baseOutputTokens*(x.reasoningOutputMultiplier||1);
+  }
+  const d=Math.max(1,x.turns);
+  return {avgFreshIn:fresh/d,avgCachedIn:cached/d,avgOut:out/d};
+}
+
+function apiCost(modelKey,annualCalls,opts){
+  const [prov,name]=modelKey.split(':');
+  const m=PRICING.llm?.[prov]?.[name];
+  if(!m)return {annual:0,detail:'unknown model',perCall:0};
+  const Rin=m.input, Rout=m.output, cf=(typeof opts.cachedInputFactor==='number'?opts.cachedInputFactor:(m.cachedInputFactor||0.5));
+  const av=convAverages(opts.conversation||{});
+  const perCall=(av.avgFreshIn*Rin + av.avgCachedIn*Rin*cf + av.avgOut*Rout)/1e6;
+  return {annual:annualCalls*perCall,detail:`fresh ${av.avgFreshIn.toFixed(0)}t + cached ${av.avgCachedIn.toFixed(0)}t (×${cf}) + out ${av.avgOut.toFixed(0)}t`,perCall,av};
+}
+
+function applyChunkMorph(conversation,arch){
+  const reduction=clamp(arch.chunkReduction||0,0,0.99);
+  const multiplier=1-reduction;
+  const ragChunks=Math.max(0,conversation.ragChunksPerTurn*multiplier);
+  return Object.assign({},conversation,{ragChunksPerTurn:ragChunks});
+}
+
+function calculate(){
+  const arch=state.arch||ARCHITECTURES.longContext;
+  const components=Object.assign({},arch.components||{});
+  Object.entries(state.componentToggles||{}).forEach(([key,value])=>{
+    if(Object.prototype.hasOwnProperty.call(components,key)){
+      components[key]=!!value;
+    }
+  });
+  const modelKey=$('model').value;
+  const [prov,name]=modelKey.split(':');
+  const model=PRICING.llm?.[prov]?.[name];
+  const convMo=+$('convM').value||0;
+  const users=Math.max(0,+$('users').value||0);
+  const turns=Math.max(1,+$('turns').value||1);
+  const H=clamp(+$('crossH').value||0,0,1);
+  const baseConversation={
+    turns,
+    sysPromptTokens:+$('sys').value||0,
+    avgUserMsgTokens:+$('umsg').value||0,
+    ragChunksPerTurn:+$('chunks').value||0,
+    ragTokensPerChunk:+$('chunkTok').value||0,
+    ragReuse:+$('reuse').value||0,
+    baseOutputTokens:220,
+    reasoningOutputMultiplier:+$('reason').value||1
+  };
+  const effectiveConversation=applyChunkMorph(baseConversation,arch);
+  const docsEl=$('embDocs');
+  const docTokensEl=$('embTok');
+  const embedQuerySelect=$('embedQuery');
+  const embedQueryTokEl=$('embedQueryTok');
+  const docs=Math.max(0,+(docsEl?docsEl.value:0));
+  const tpd=Math.max(0,+(docTokensEl?docTokensEl.value:0));
+  const embedQueryEnabled=(embedQuerySelect?embedQuerySelect.value:'no')==='yes';
+  const embedQueryTokens=Math.max(0,+(embedQueryTokEl?embedQueryTokEl.value:0));
+  const averages=convAverages(effectiveConversation);
+  const annualConversations=convMo*12;
+  const baseAnnualCalls=(annualConversations*turns)*(1-H);
+  const agentSteps=arch.agentSteps||1;
+  const effectiveCalls=baseAnnualCalls*agentSteps;
+  const rawCache=$('cachedFactor').value;
+  const parsedCache=parseFloat(rawCache);
+  const hasCache=rawCache!=='' && !Number.isNaN(parsedCache);
+  const resolvedCacheFactor=hasCache?clamp(parsedCache,0,1):(model?.cachedInputFactor||0.5);
+
+  const variableCallBasis=arch.scaleVariableWithSteps?effectiveCalls:baseAnnualCalls;
+  const readBasis=arch.scaleReadsWithSteps?effectiveCalls:baseAnnualCalls;
+  const infraBasis=arch.scaleVariableWithSteps?effectiveCalls:baseAnnualCalls;
+  const hasCorpus=docs>0 && tpd>0;
+  const hasRagContext=effectiveConversation.ragChunksPerTurn>0 && effectiveConversation.ragTokensPerChunk>0;
+  const runtimeRetrieval=hasRagContext && embedQueryEnabled;
+  const retrievalWithCorpus=runtimeRetrieval && hasCorpus;
+
+  if(components.queryEmbedding && !runtimeRetrieval){
+    components.queryEmbedding=false;
+  }
+  if(components.prefilter && !runtimeRetrieval){
+    components.prefilter=false;
+  }
+  if(components.reranker && !runtimeRetrieval){
+    components.reranker=false;
+  }
+  if(components.embedding && !retrievalWithCorpus){
+    components.embedding=false;
+  }
+  if(components.vectorDb && !retrievalWithCorpus){
+    components.vectorDb=false;
+  }
+  if(!components.vectorDb){
+    components.queryEmbedding=false;
+  }
+
+  const breakdown={};
+  const add=(name,monthly,annual,type,notes)=>{
+    if(!annual || annual<=0)return;
+    breakdown[name]={monthly,annual,type,notes};
+  };
+
+  if(!model){
+    return {
+      breakdown:{},
+      annual:0,
+      variableMonthly:0,
+      recurringMonthly:0,
+      steadyMonthly:0,
+      month1:0,
+      unitAnnual:0,
+      annualConversations,
+      annualCalls:baseAnnualCalls,
+      effectiveCalls,
+      turns,
+      H,
+      cachedFactor:resolvedCacheFactor,
+      conversation:baseConversation,
+      effectiveConversation,
+      modelKey,
+      model:{input:0,output:0},
+      arch,
+      averages,
+      contextTokensPerTurn:effectiveConversation.ragChunksPerTurn*effectiveConversation.ragTokensPerChunk,
+      agentSteps,
+      convMo,
+      users,
+      variableCallBasis,
+      readBasis,
+      infraBasis,
+      components
+    };
+  }
+
+  const api=apiCost(modelKey,arch.scaleVariableWithSteps?effectiveCalls:baseAnnualCalls,{conversation:effectiveConversation,cachedInputFactor:resolvedCacheFactor});
+  const providerNote=model?.source?` via ${model.source}`:'';
+  add('LLM API Cost',api.annual/12,api.annual,'variable',`${Math.round(arch.scaleVariableWithSteps?effectiveCalls:baseAnnualCalls).toLocaleString()} calls/yr${providerNote}; ${api.detail}`);
+
+  if(components.queryEmbedding){
+    const embMeta=getEmbeddingMeta();
+    const pricePerM=embMeta?.pricePerM||0;
+    const perCall=(embedQueryTokens*pricePerM)/1e6;
+    const annual=perCall*readBasis;
+    const label=embMeta?embMeta.label:'Embedding model';
+    if(annual>0) add('Query Embeddings',annual/12,annual,'variable',`~${embedQueryTokens}t/turn • ${label} @ $${pricePerM}/M`);
+  }
+
+  if(components.embedding && docs>0 && tpd>0){
+    const embMeta=getEmbeddingMeta();
+    const pricePerM=embMeta?.pricePerM||0;
+    const label=embMeta?embMeta.label:'Embedding model';
+    const one=(docs*tpd/1e6)*pricePerM;
+    if(one>0){add('Initial Embedding',0,one,'one-time',`${docs.toLocaleString()} × ${tpd}t • ${label} @ $${pricePerM}/M`);}
+  }
+
+  if(components.vectorDb && state.vendorSelections.vectorDb==='custom'){
+    const storageMo=hasCorpus?(docs/1e6)*RATES.vdb_storage_per_million_vectors:0;
+    const readsMo=components.queryEmbedding?(readBasis/12/1e6)*RATES.vdb_reads_per_million:0;
+    if(storageMo>0){
+      add('Vector DB — Storage',storageMo,storageMo*12,'recurring',`storage ${format$(storageMo)}/mo (editable rates)`);
+    }
+    if(readsMo>0){
+      add('Vector DB — Reads',readsMo,readsMo*12,'variable',`reads ${format$(readsMo)}/mo (editable rates)`);
+    }
+  }
+
+  if(components.vectorDb && state.vendorSelections.vectorDb!=='custom'){
+    const preset=VENDOR_PRESETS.vectorDb[state.vendorSelections.vectorDb];
+    if(preset){
+      const monthly=preset.monthly||0;
+      add('Vector Database',monthly,monthly*12,'recurring',formatVendorNote(preset));
+    }
+  }
+
+  if(components.reranker){
+    const rerankMo=(readBasis/12/1000)*RATES.reranker_per_thousand;
+    add('Reranker',rerankMo,rerankMo*12,'variable',`${Math.round(readBasis/12).toLocaleString()} reranks/mo @ ${RATES.reranker_per_thousand}/1k`);
+  }
+
+  if(components.tools && RATES.tools_per_thousand_calls>0){
+    const toolsMo=(variableCallBasis/12/1000)*RATES.tools_per_thousand_calls;
+    add('Tools',toolsMo,toolsMo*12,'variable',`${Math.round(variableCallBasis/12).toLocaleString()} tool exec/mo @ ${RATES.tools_per_thousand_calls}/1k`);
+  }
+
+  if(state.vendorSelections.infrastructure==='custom'){
+    const infraMo=RATES.infra_base_monthly+(infraBasis/12/1e6)*RATES.infra_per_million_calls;
+    add('Hosting & Infrastructure',infraMo,infraMo*12,'recurring',`base ${format$(RATES.infra_base_monthly)} + per‑M‑calls @ ${RATES.infra_per_million_calls}`);
+  }else{
+    const preset=VENDOR_PRESETS.infrastructure[state.vendorSelections.infrastructure];
+    if(preset){
+      const base=preset.monthly||0;
+      const perM=preset.perMillionCalls||0;
+      const infraMo=base+(perM*(infraBasis/12/1e6));
+      add('Hosting & Infrastructure',infraMo,infraMo*12,'recurring',formatVendorNote(preset));
+    }
+  }
+
+  if(components.monitor){
+    const monBasis=arch.scaleVariableWithSteps?effectiveCalls:baseAnnualCalls;
+    if(state.vendorSelections.monitoring==='custom'){
+      const monMo=RATES.monitoring_base_monthly+(monBasis/12/1e6)*RATES.monitoring_per_million_calls;
+      add('Monitoring & Observability',monMo,monMo*12,'recurring',`base ${format$(RATES.monitoring_base_monthly)} + per‑M‑calls @ ${RATES.monitoring_per_million_calls}`);
+    }else{
+      const preset=VENDOR_PRESETS.monitoring[state.vendorSelections.monitoring];
+      if(preset){
+        const base=preset.monthly||0;
+        const perM=preset.perMillionCalls||0;
+        const monMo=base+(perM*(monBasis/12/1e6));
+        add('Monitoring & Observability',monMo,monMo*12,'recurring',formatVendorNote(preset));
+      }
+    }
+  }
+
+  if(components.governance){
+    add('Content Moderation',50,600,'recurring','placeholder');
+    add('PII Detection',40,480,'recurring','placeholder');
+  }
+
+  
+
+  const setupOneTime=Math.max(0,+($('setupOneTime')?.value||0));
+  if(setupOneTime>0){ add('Initial Setup',setupOneTime,setupOneTime,'one-time','Adjust to your project'); }
+
+  const values=Object.values(breakdown);
+  const annual=values.reduce((s,x)=>s+x.annual,0);
+  const variableMonthly=values.filter(x=>x.type==='variable').reduce((s,x)=>s+x.monthly,0);
+  const recurringMonthly=values.filter(x=>x.type==='recurring').reduce((s,x)=>s+x.monthly,0);
+  const oneTimeTotal=values.filter(x=>x.type==='one-time').reduce((s,x)=>s+x.annual,0);
+  const steadyMonthly=variableMonthly+recurringMonthly;
+  const month1=steadyMonthly+oneTimeTotal;
+  const unitAnnual=annual/Math.max(1,annualConversations);
+  const perUserMonthly = users>0 ? steadyMonthly/Math.max(1,users) : null;
+
+  return {
+    breakdown,
+    annual,
+    variableMonthly,
+    recurringMonthly,
+    steadyMonthly,
+    month1,
+    unitAnnual,
+    annualConversations,
+    annualCalls:baseAnnualCalls,
+    effectiveCalls,
+    turns,
+    H,
+    cachedFactor:resolvedCacheFactor,
+    conversation:baseConversation,
+    effectiveConversation,
+    modelKey,
+    model,
+    arch,
+    averages,
+    contextTokensPerTurn:effectiveConversation.ragChunksPerTurn*effectiveConversation.ragTokensPerChunk,
+    agentSteps,
+    convMo,
+    users,
+    variableCallBasis,
+    readBasis,
+    infraBasis,
+    components,
+    perUserMonthly
+  };
+}
+
+function renderBars(breakdown){
+  const entries=Object.entries(breakdown).filter(([,v])=>v.annual>0);
+  const total=entries.reduce((s,[,v])=>s+v.annual,0)||1;
+  const segments=entries.map(([k,v])=>{
+    const pct=(v.annual/total)*100;
+    const width=Math.max(0.5,pct);
+    return `<div style="width:${width}%; background:${COLORS[k]||'#ddd'}" title="${k}: ${format$(v.annual)} (${pct.toFixed(1)}%)"></div>`;
+  }).join('');
+  const bar=`<div class="bar">${segments}</div>`;
+  const legendRows=entries.map(([k,v])=>{
+    const pct=(v.annual/total)*100;
+    return `<div class="row"><span class="label"><span class="dot" style="background:${COLORS[k]||'#ddd'}"></span>${k}</span><span><strong>${format$(v.annual)}</strong> <span class="muted">(${pct.toFixed(1)}%)</span></span></div>`;
+  }).join('');
+  $('barAnnual').innerHTML=bar+`<div class="legend">${legendRows}</div>`;
+}
+
+function renderGroups(breakdown){
+  const entries=Object.entries(breakdown);
+  const groups={
+    variable:entries.filter(([,v])=>v.type==='variable'),
+    recurring:entries.filter(([,v])=>v.type==='recurring'),
+    oneTime:entries.filter(([,v])=>v.type==='one-time')
+  };
+  const renderTable=(rows,title)=>{
+    if(!rows.length)return '';
+    const body=rows.map(([k,v])=>{
+      const monthly=v.type==='one-time'?'<span class="muted">—</span>':format$(v.monthly);
+      return `<tr><td><strong>${k}</strong></td><td>${monthly}</td><td><strong>${format$(v.annual)}</strong></td><td class="notes">${v.notes||''}</td></tr>`;
+    }).join('');
+    return `<details open><summary>${title}</summary><table><thead><tr><th>Component</th><th>Monthly</th><th>Annual</th><th>Notes</th></tr></thead><tbody>${body}</tbody></table></details>`;
+  };
+  $('groups').innerHTML=
+    renderTable(groups.variable,'💸 Variable Costs (Usage)')+
+    renderTable(groups.recurring,'🔄 Recurring Costs (Monthly)')+
+    renderTable(groups.oneTime,'🎯 One‑Time Costs');
+}
+
+function renderArch(){
+  const arch=state.arch||ARCHITECTURES.longContext;
+  const components=state.activeComponents||arch.components||{};
+  const nodes=arch.flow.filter(step=>!step.component || components[step.component]);
+  const markup=nodes.map((node,idx)=>{
+    const classes=['flow-block'];
+    if(node.component){
+      classes.push('active');
+    }else{
+      classes.push('neutral');
+    }
+    const parts=[`<div class="${classes.join(' ')}">${node.label}</div>`];
+    if(idx<nodes.length-1){parts.push('<div class="flow-arrow">→</div>');}
+    return parts.join('');
+  }).join('');
+  $('archFlow').innerHTML=markup;
+}
+
+function formatArchitectureNotes(res){
+  const c=res.components;
+  switch(res.arch.key){
+    case 'longContext':
+      return 'Context Pack supplied in prompt; no vector DB or per-turn embeddings. Optional monitoring/governance/HITL can be toggled above.';
+    case 'classicRag':
+      return `Dense retrieval with vector DB${c.monitor?' and monitoring enabled':'; monitoring can be toggled above'}. Query embeddings should remain ON for accurate recall.`;
+    case 'hybridRag':{
+      const reduction=(res.arch.chunkReduction||0)*100;
+      const rerankerState=c.reranker?'ON':'OFF';
+      const monitorState=c.monitor?'ON':'OFF';
+      return `Hybrid retrieval: sparse prefilter trims dense chunks by ${reduction.toFixed(0)}%; reranker ${rerankerState}, monitoring ${monitorState}.`;
+    }
+    case 'agenticRag':{
+      const toolState=c.tools?'ENABLED':'DISABLED';
+      return `Agent orchestration with multi-step reasoning (×${res.agentSteps}). Tools ${toolState}, monitoring ${c.monitor?'ON':'OFF'}.`;
+    }
+    default:
+      return '';
+  }
+}
+
+function renderAssumptions(res){
+  $('aArch').textContent=`${res.arch.label}`;
+  $('aModel').textContent=res.modelKey;
+  const source=res.model.source ? ` • via ${res.model.source}` : '';
+  $('aPrices').textContent=`Input ${res.model.input}/M • Output ${res.model.output}/M • Cached factor ${res.cachedFactor}${source}`;
+  const chunkCount=res.effectiveConversation.ragChunksPerTurn;
+  const chunkLabel=chunkCount%1===0?chunkCount.toFixed(0):chunkCount.toFixed(2);
+  const contextLabel=res.components.contextPack?'Context Pack':'Context';
+  $('aConv').textContent=`${res.turns} turns • ~${res.conversation.avgUserMsgTokens}t user • ${res.conversation.sysPromptTokens}t system • ${contextLabel}: ${chunkLabel} × ${res.effectiveConversation.ragTokensPerChunk}t (reuse ${(res.conversation.ragReuse*100).toFixed(0)}%) • reason ×${res.conversation.reasoningOutputMultiplier}`;
+  $('aRag').textContent=formatArchitectureNotes(res);
+  $('aAgent').textContent=res.agentSteps===1?'Single-step (×1)':`${res.agentSteps} steps/conversation (variable costs ×${res.agentSteps})`;
+  $('aCache').textContent=`Cross-conv dedupe H ${(res.H*100).toFixed(0)}% • Prompt-cache factor ${res.cachedFactor}`;
+  if(res.users>0){
+    const convPerUser = res.convMo>0 ? res.convMo/Math.max(res.users,1) : 0;
+    $('aUsers').textContent=`${res.users.toLocaleString()} active/mo • ~${convPerUser.toFixed(2)} conversations per user`;
+  }else{
+    $('aUsers').textContent='Not provided';
+  }
+  const convLabel=res.convMo.toLocaleString();
+  let math=`Baseline calls/year = conv/mo × 12 × turns × (1 − H) = <strong>${convLabel} × 12 × ${res.turns} × ${(1-res.H).toFixed(2)}</strong> = <strong>${Math.round(res.annualCalls).toLocaleString()}</strong>`;
+  if(res.agentSteps>1){
+    math += `<br>Agent steps ×${res.agentSteps} → Effective calls = <strong>${Math.round(res.effectiveCalls).toLocaleString()}</strong>`;
+  }
+  math += `<br>Avg tokens/call → fresh ${formatTokens(res.averages.avgFreshIn)}, cached ${formatTokens(res.averages.avgCachedIn)}, output ${formatTokens(res.averages.avgOut)}`;
+  $('math').innerHTML=math;
+}
+
+function renderTransparency(res){
+  const panel=$('assumptionPanel');
+  if(!panel)return;
+  const bullets=[];
+  const breakdown=res.breakdown||{};
+  const modelSource=res.model.source||'Unknown provider';
+  const callsMonthly=res.variableCallBasis/12;
+  const callsMillionsMonthly=callsMonthly/1e6;
+  const convMonthly=res.convMo||0;
+  const embeddingMeta=getEmbeddingMeta();
+  const vectorPreset=VENDOR_PRESETS.vectorDb[state.vendorSelections.vectorDb];
+  const infraPreset=VENDOR_PRESETS.infrastructure[state.vendorSelections.infrastructure];
+  const monitorPreset=VENDOR_PRESETS.monitoring[state.vendorSelections.monitoring];
+  const docs=+($('embDocs')?.value||0);
+  const docTokens=+($('embTok')?.value||0);
+
+  const llmPerCall=(res.averages.avgFreshIn*res.model.input/1e6)+(res.averages.avgCachedIn*res.model.input*res.cachedFactor/1e6)+(res.averages.avgOut*res.model.output/1e6);
+
+  // Notation primer for non‑technical users
+  bullets.push('<strong>Notation</strong>: t = tokens; 1K = 1,000; 1M = 1,000,000 (1e6). $/M means dollars per million tokens or calls; $/1K means per thousand.');
+
+  bullets.push(`<strong>LLM pricing</strong>: ${res.modelKey} (${modelSource}) — input $${res.model.input.toFixed(3)}/M, output $${res.model.output.toFixed(3)}/M, cached inputs ×${res.cachedFactor}. Update <code>PRICING.llm</code> if your vendor rates differ.`);
+
+  bullets.push(`<strong>Volume assumption</strong>: ${formatNum(convMonthly)} conversations/mo → ${formatNum(callsMonthly)} LLM calls/mo after ${(res.H*100).toFixed(0)}% cross-conversation dedupe${res.agentSteps>1?` and agent steps ×${res.agentSteps}`:''}.`);
+
+  bullets.push('<strong>Architecture options</strong>: toggles under “Architecture Options” add or remove monitoring, governance, tools, and HITL spend for this scenario.');
+
+  bullets.push(`<strong>LLM API cost</strong>: fresh ${formatTokens(res.averages.avgFreshIn)}, cached ${formatTokens(res.averages.avgCachedIn)} (×${res.cachedFactor}), output ${formatTokens(res.averages.avgOut)} ⇒ ~$${llmPerCall.toFixed(6)} per call × ${formatNum(res.variableCallBasis)} calls/yr.`);
+
+  const hasQueryEmb=!!breakdown['Query Embeddings'];
+  const hasInitEmb=!!breakdown['Initial Embedding'];
+  if(embeddingMeta && (hasQueryEmb || hasInitEmb)){
+    const perM = embeddingMeta.pricePerM||0;
+    const per1K = perM/1000;
+    bullets.push(`<strong>Embedding model</strong>: ${embeddingMeta.label} — $${per1K.toFixed(4)}/1K tokens (normalized: $${perM.toFixed(2)}/M). Source: ${embeddingMeta.source||'unknown'}`);
+  }
+
+  const hosting=breakdown['Hosting & Infrastructure'];
+  const monitoring=breakdown['Monitoring & Observability'];
+  const vectorStorage=breakdown['Vector DB — Storage'];
+  const vectorReads=breakdown['Vector DB — Reads'];
+  const vectorVendor=breakdown['Vector Database'];
+  const tools=breakdown['Tools'];
+  const moderation=breakdown['Content Moderation'];
+  const pii=breakdown['PII Detection'];
+  const initialEmbedding=breakdown['Initial Embedding'];
+
+  if(hosting){
+    if(state.vendorSelections.infrastructure==='custom'){
+      bullets.push(`<strong>Hosting & Infrastructure</strong>: base ${format$(RATES.infra_base_monthly)} + (${callsMillionsMonthly.toFixed(3)}M calls/mo × $${RATES.infra_per_million_calls}/M) = ${format$(hosting.monthly)} per month. Tune <code>RATES.infra_*</code> to match your stack.`);
+    }else{
+      bullets.push(`<strong>Hosting & Infrastructure</strong>: ${infraPreset.label} — ${format$(hosting.monthly)} per month (${formatVendorNote(infraPreset)})`);
+    }
+  }
+  if(monitoring){
+    if(state.vendorSelections.monitoring==='custom'){
+      bullets.push(`<strong>Monitoring & Observability</strong>: base ${format$(RATES.monitoring_base_monthly)} + (${callsMillionsMonthly.toFixed(3)}M calls/mo × $${RATES.monitoring_per_million_calls}/M) = ${format$(monitoring.monthly)} per month.`);
+    }else{
+      bullets.push(`<strong>Monitoring & Observability</strong>: ${monitorPreset.label} — ${format$(monitoring.monthly)} per month (${formatVendorNote(monitorPreset)})`);
+    }
+  }
+  if(vectorVendor){
+    bullets.push(`<strong>Vector database (preset)</strong>: ${vectorPreset.label} — ${format$(vectorVendor.monthly)} per month (${formatVendorNote(vectorPreset)})`);
+  } else if(vectorStorage || vectorReads){
+    if(vectorStorage){
+      bullets.push(`<strong>Vector database (custom) — Storage (recurring)</strong>: ${format$(vectorStorage.monthly)} per month (basis: number of documents; current: ${docs.toLocaleString()} docs).`);
+    }
+    if(vectorReads){
+      const readsMo = res.readBasis/12;
+      bullets.push(`<strong>Vector database (custom) — Reads (usage)</strong>: ${format$(vectorReads.monthly)} per month (basis: query volume per month; scales with retrieval calls).`);
+    }
+    bullets.push('Note: “tokens per doc” affects one‑time corpus embedding only (not monthly storage/reads).');
+  }
+  if(tools){
+    bullets.push(`<strong>Tools/API executions (usage)</strong>: assumes ~1.0 tool calls per LLM call → ${formatNum(callsMonthly)} tool calls/mo ÷ 1k × $${RATES.tools_per_thousand_calls}/1k = ${format$(tools.monthly)} per month. Adjust <code>RATES.tools_per_thousand_calls</code> if your workload differs.`);
+  }
+  const reranker=breakdown['Reranker'];
+  if(reranker){
+    const readsMonthly=Math.round(res.readBasis/12);
+    bullets.push(`<strong>Reranker (usage)</strong>: ${formatNum(readsMonthly)} reranks/mo ÷ 1k × $${RATES.reranker_per_thousand}/1k = ${format$(reranker.monthly)} per month.`);
+  }
+  if(moderation||pii){
+    bullets.push('<strong>Governance add-ons</strong>: content moderation and PII detection use placeholder retainers—set the monthly values in <code>RATES</code> to reflect vendor quotes.');
+  }
+  
+
+  const setupVal=+($('setupOneTime')?.value||0);
+  if(initialEmbedding || setupVal>0){
+    const parts=[];
+    if(initialEmbedding){ parts.push(`corpus embedding (${docs.toLocaleString()} docs × ${docTokens} tokens)`); }
+    if(setupVal>0){ parts.push(`project setup ${format$(setupVal)}`); }
+    bullets.push(`<strong>One-time costs</strong>: ${parts.join(' and ')}. These hit Month 1 only.`);
+  }else{
+    bullets.push('<strong>One-time costs</strong>: default setup can be adjusted above. Corpus embedding appears once you supply document volume > 0.');
+  }
+
+  bullets.push('<strong>Recurring vs. usage</strong>: recurring lines represent committed spend (kept even at low traffic); variable lines scale with effective call volume. Update the <code>RATES</code> constants at the top of this file to keep the model accurate.');
+
+  panel.innerHTML=`<ul>${bullets.map(b=>`<li>${b}</li>`).join('')}</ul>`;
+}
+
+function warnings(res){
+  const msgs=[];
+  if(res.arch.key==='longContext' && ($('embedQuery').value==='yes')){msgs.push('Long-Context doesn’t use retrieval infra. Switch to Classic/Hybrid/Agentic.');}
+  if(!res.components.monitor){msgs.push('Monitoring is OFF — totals may look low but you may lack observability at scale.');}
+  const cw=res.model?.contextWindow||0;
+  const inputTokens=(res.averages?.avgFreshIn||0)+(res.averages?.avgCachedIn||0);
+  if(cw>0){
+    if(inputTokens>cw){msgs.push(`Estimated input per call (~${Math.round(inputTokens)} tokens) exceeds model context window (${cw}). Reduce context or pick another model.`);} 
+    else if(inputTokens>0.9*cw){msgs.push(`Estimated input per call (~${Math.round(inputTokens)} tokens) is near the model context window (${cw}). Consider reducing context.`);}
+  }
+  const el=$('warnings');
+  el.style.display=msgs.length?'block':'none';
+  el.innerHTML=msgs.map(m=>'• '+m).join('<br>');
+}
+
+function recalc(){
+  const res=calculate();
+  lastCalc=res;
+  state.activeComponents=res.components||{};
+  if(res.users>0){
+    state.convPerUserRatio=(res.convMo/Math.max(1,res.users))||state.convPerUserRatio||1;
+  }
+  $('kAnnual').textContent=format$(res.annual);
+  $('kMonthly').textContent=format$(res.steadyMonthly);
+  $('kM1').textContent=format$(res.month1);
+  $('kUnit').textContent=format$(res.unitAnnual);
+  $('kUser').textContent = res.users>0 && Number.isFinite(res.perUserMonthly)
+    ? format$(res.perUserMonthly)
+    : '—';
+  renderBars(res.breakdown);
+  renderGroups(res.breakdown);
+  renderArch();
+  renderAssumptions(res);
+  renderTransparency(res);
+  warnings(res);
+}
+
+function applyPreset(key){
+  const arch=ARCHITECTURES[key];
+  if(!arch)return;
+  state.currentArchKey=key;
+  state.arch=arch;
+  const defaults=arch.defaults||{};
+  const inputDefaults=defaults.inputs||{};
+  Object.entries(inputDefaults).forEach(([id,value])=>setInputValue(id,value));
+  if(typeof defaults.convPerUser==='function'){
+    state.convPerUserRatio=defaults.convPerUser(inputDefaults)||1;
+  }else{
+    const ratio=inputDefaults.users?inputDefaults.convM/Math.max(1,inputDefaults.users):state.convPerUserRatio||1;
+    state.convPerUserRatio=ratio||1;
+  }
+  state.autoSyncConv=true;
+  state.embeddingKey=EMBEDDING_DEFAULT;
+  state.vendorSelections={vectorDb:'custom',infrastructure:'custom',monitoring:'custom'};
+  setSelectValue('embeddingPreset',state.embeddingKey);
+  setSelectValue('vectorPreset',state.vendorSelections.vectorDb);
+  setSelectValue('infraPreset',state.vendorSelections.infrastructure);
+  setSelectValue('monitorPreset',state.vendorSelections.monitoring);
+  enforceModelConstraint(arch);
+  enforceEmbeddingToggle(arch);
+  state.componentToggles={};
+  configureTogglesForArch(arch);
+  syncTogglesFromInputs();
+  document.querySelectorAll('.preset-btn[data-preset]').forEach(btn=>btn.classList.toggle('active',btn.dataset.preset===key));
+  updatePresetNotes();
+  recalc();
+}
+
+function resetToDefaults(){
+  const archKey=state.currentArchKey||'longContext';
+  applyPreset(archKey);
+}
+
+function handleInputEvent(e){
+  const target=e.target;
+  if(!target || !target.id)return;
+  const toggleKey=TOGGLE_IDS[target.id];
+  if(toggleKey){
+    state.componentToggles[toggleKey]=target.checked;
+    recalc();
+    return;
+  }
+  if(target.id==='convM' && !suppressUserSync){
+    state.autoSyncConv=false;
+  }
+  if(target.id==='users' && !suppressUserSync && state.autoSyncConv){
+    const users=Math.max(0,parseInt(target.value,10)||0);
+    const ratio=state.convPerUserRatio||1;
+    const convEl=$('convM');
+    if(convEl){
+      suppressUserSync=true;
+      const conversations=Math.max(0,Math.round(users*ratio));
+      convEl.value=conversations;
+      convEl.dispatchEvent(new Event('input',{bubbles:true}));
+      suppressUserSync=false;
+    }
+  }
+  if(!WATCH_IDS.has(target.id))return;
+  recalc();
+}
+
+function init(){
+  fillModels();
+  fillEmbeddingOptions();
+  fillVendorPresetSelect('vectorDb','vectorPreset');
+  fillVendorPresetSelect('infrastructure','infraPreset');
+  fillVendorPresetSelect('monitoring','monitorPreset');
+  document.addEventListener('input',handleInputEvent,true);
+  document.addEventListener('change',handleInputEvent,true);
+  document.querySelectorAll('.preset-btn[data-preset]').forEach(btn=>btn.addEventListener('click',()=>applyPreset(btn.dataset.preset)));
+  // Setup calculator event wiring (local only; main recalc happens via Apply)
+  ['setupPmHours','setupPmRate','setupArchHours','setupArchRate','setupAiHours','setupAiRate','setupDirHours','setupDirRate','setupContPct']
+    .forEach(id=>{ const el=$(id); if(el){ el.addEventListener('input',updateSetupCalcUI); }});
+  const applyBtn=$('applySetupBtn'); if(applyBtn){ applyBtn.addEventListener('click',applySetupFromCalc); }
+  updateSetupCalcUI();
+  const embedSel=$('embeddingPreset');
+  if(embedSel){embedSel.addEventListener('change',onEmbeddingPresetChange);} 
+  const vectorSel=$('vectorPreset');
+  if(vectorSel){vectorSel.addEventListener('change',()=>onVendorPresetChange('vectorDb','vectorPreset'));}
+  const infraSel=$('infraPreset');
+  if(infraSel){infraSel.addEventListener('change',()=>onVendorPresetChange('infrastructure','infraPreset'));}
+  const monitorSel=$('monitorPreset');
+  if(monitorSel){monitorSel.addEventListener('change',()=>onVendorPresetChange('monitoring','monitorPreset'));}
+  const resetBtn=$('resetBtn');
+  if(resetBtn){resetBtn.addEventListener('click',resetToDefaults);}
+  applyPreset('longContext');
+}
+
+if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',init);}else{init();}
+</script>
+</body>
+</html>
